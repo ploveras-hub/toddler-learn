@@ -1,0 +1,1 @@
+Drop animal sound effects here, named to match the app: lion.mp3, elephant.mp3, monkey.mp3, tiger.mp3, bear.mp3, giraffe.mp3, zebra.mp3, hippo.mp3, rhino.mp3, kangaroo.mp3, leopard.mp3, gorilla.mp3, wolf.mp3, fox.mp3, deer.mp3, panda.mp3, crocodile.mp3, cheetah.mp3, owl.mp3, koala.mp3

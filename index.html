@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<meta name="theme-color" content="#a8e6a1" />
+<title>🦁 Wild Animal Explorer</title>
+<style>
+  :root {
+    --font: "Comic Sans MS", "Chalkboard SE", "Comic Neue", system-ui, -apple-system, sans-serif;
+    --shadow: 0 10px 22px rgba(60, 90, 40, 0.18);
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  html, body { margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--font);
+    min-height: 100vh;
+    background: linear-gradient(160deg, #d8f5c8 0%, #f6f8b0 45%, #ffe7a0 100%);
+    background-attachment: fixed;
+    color: #2f4a1e;
+    -webkit-user-select: none;
+    user-select: none;
+    overflow-x: hidden;
+  }
+
+  /* ---------- Header ---------- */
+  header {
+    width: 100%;
+    text-align: center;
+    padding: 18px 12px;
+    background: linear-gradient(90deg, #ff9a76, #ffcf5c, #7ed957, #4fc3f7);
+    color: #fff;
+    font-size: clamp(1.5rem, 6vw, 2.6rem);
+    font-weight: 900;
+    letter-spacing: 0.5px;
+    text-shadow: 0 3px 0 rgba(0, 0, 0, 0.18);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+    position: sticky;
+    top: 0;
+    z-index: 20;
+  }
+
+  /* ---------- Score bar ---------- */
+  .scorebar {
+    position: sticky;
+    top: 62px;
+    z-index: 19;
+    display: flex;
+    justify-content: center;
+    padding: 10px;
+  }
+  .score-pill {
+    background: #fff;
+    border: 4px solid #ffd54a;
+    border-radius: 999px;
+    padding: 8px 22px;
+    font-size: clamp(1.1rem, 4.5vw, 1.6rem);
+    font-weight: 900;
+    color: #e67e22;
+    box-shadow: var(--shadow);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: transform 0.18s ease;
+  }
+  .score-pill.pop { transform: scale(1.18); }
+
+  /* ---------- Grid ---------- */
+  main {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 14px;
+    padding: 14px;
+    max-width: 1100px;
+    margin: 0 auto 30px;
+  }
+  @media (min-width: 700px) {
+    main { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 20px; }
+  }
+
+  /* ---------- Cards ---------- */
+  .card {
+    border: none;
+    background: var(--bg, #fff);
+    border-radius: 26px;
+    padding: 16px 10px 14px;
+    box-shadow: var(--shadow);
+    cursor: pointer;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+    font-family: var(--font);
+    outline: none;
+  }
+  .card:focus-visible { box-shadow: 0 0 0 4px #4fc3f7, var(--shadow); }
+  .card:active,
+  .card.pressed {
+    transform: scale(0.95);
+    box-shadow: 0 4px 10px rgba(60, 90, 40, 0.2);
+  }
+
+  .card .art {
+    width: min(30vw, 110px);
+    height: min(30vw, 110px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+  .card .art img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    filter: drop-shadow(0 3px 3px rgba(0, 0, 0, 0.15));
+  }
+  .card .art .emoji {
+    font-size: min(26vw, 96px);
+    line-height: 1;
+  }
+  .card .name {
+    font-size: clamp(1rem, 4.5vw, 1.35rem);
+    font-weight: 900;
+    color: #3a5a24;
+  }
+
+  /* little bounce when tapped */
+  @keyframes wobble {
+    0%   { transform: scale(0.95); }
+    50%  { transform: scale(1.06) rotate(-2deg); }
+    100% { transform: scale(1); }
+  }
+  .card.play { animation: wobble 0.35s ease; }
+
+  footer {
+    text-align: center;
+    padding: 4px 12px 24px;
+    color: #6b7a4d;
+    font-size: 0.85rem;
+  }
+</style>
+</head>
+<body>
+  <header>🦁 Wild Animal Explorer</header>
+
+  <div class="scorebar">
+    <div class="score-pill" id="scorePill">⭐ Points: <span id="score">0</span></div>
+  </div>
+
+  <main id="grid" aria-label="Wild animals"></main>
+
+  <footer>Tap an animal to hear its name! 🐾</footer>
+
+<script>
+(function () {
+  "use strict";
+
+  // Twemoji CDN base — cute cartoon/vector illustrations (pinned version for stability).
+  var IMG_BASE = "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/";
+
+  // Soft pastel palette cycled across the cards.
+  var COLORS = [
+    "#fff2cc", "#ffe0e6", "#e2f7d5", "#dceeff", "#f3e0ff",
+    "#ffe9cc", "#d9f7f0", "#fce1f0", "#eef7cc", "#e0ecff"
+  ];
+
+  // name, twemoji codepoint, native emoji fallback, sound file (in sounds/ folder)
+  var ANIMALS = [
+    { name: "Lion",      code: "1f981", emoji: "🦁", sound: "lion" },
+    { name: "Elephant",  code: "1f418", emoji: "🐘", sound: "elephant" },
+    { name: "Monkey",    code: "1f412", emoji: "🐒", sound: "monkey" },
+    { name: "Tiger",     code: "1f42f", emoji: "🐯", sound: "tiger" },
+    { name: "Bear",      code: "1f43b", emoji: "🐻", sound: "bear" },
+    { name: "Giraffe",   code: "1f992", emoji: "🦒", sound: "giraffe" },
+    { name: "Zebra",     code: "1f993", emoji: "🦓", sound: "zebra" },
+    { name: "Hippo",     code: "1f99b", emoji: "🦛", sound: "hippo" },
+    { name: "Rhino",     code: "1f98f", emoji: "🦏", sound: "rhino" },
+    { name: "Kangaroo",  code: "1f998", emoji: "🦘", sound: "kangaroo" },
+    { name: "Leopard",   code: "1f406", emoji: "🐆", sound: "leopard" },
+    { name: "Gorilla",   code: "1f98d", emoji: "🦍", sound: "gorilla" },
+    { name: "Wolf",      code: "1f43a", emoji: "🐺", sound: "wolf" },
+    { name: "Fox",       code: "1f98a", emoji: "🦊", sound: "fox" },
+    { name: "Deer",      code: "1f98c", emoji: "🦌", sound: "deer" },
+    { name: "Panda",     code: "1f43c", emoji: "🐼", sound: "panda" },
+    { name: "Crocodile", code: "1f40a", emoji: "🐊", sound: "crocodile" },
+    { name: "Cheetah",   code: "1f406", emoji: "🐆", sound: "cheetah" },
+    { name: "Owl",       code: "1f989", emoji: "🦉", sound: "owl" },
+    { name: "Koala",     code: "1f428", emoji: "🐨", sound: "koala" }
+  ];
+
+  var grid = document.getElementById("grid");
+  var scoreEl = document.getElementById("score");
+  var scorePill = document.getElementById("scorePill");
+  var score = 0;
+
+  var speechOK = "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
+  var currentAudio = null;   // track the currently playing sound effect
+  var audioCtx = null;       // lazily-created WebAudio context for the fallback chime
+
+  // ---- Build the grid ----
+  ANIMALS.forEach(function (animal, i) {
+    var card = document.createElement("button");
+    card.type = "button";
+    card.className = "card";
+    card.style.setProperty("--bg", COLORS[i % COLORS.length]);
+    card.setAttribute("aria-label", animal.name);
+
+    var art = document.createElement("div");
+    art.className = "art";
+
+    var img = document.createElement("img");
+    img.src = IMG_BASE + animal.code + ".svg";
+    img.alt = animal.name;
+    img.loading = "lazy";
+    // Fallback: if the image fails to load, show the native emoji instead.
+    img.onerror = function () {
+      var span = document.createElement("span");
+      span.className = "emoji";
+      span.textContent = animal.emoji;
+      art.replaceChild(span, img);
+    };
+
+    art.appendChild(img);
+
+    var name = document.createElement("div");
+    name.className = "name";
+    name.textContent = animal.name;
+
+    card.appendChild(art);
+    card.appendChild(name);
+
+    card.addEventListener("click", function () {
+      // replay wobble animation
+      card.classList.remove("play");
+      void card.offsetWidth;
+      card.classList.add("play");
+      playAnimal(animal);
+    });
+
+    grid.appendChild(card);
+  });
+
+  // ---- Score ----
+  function bumpScore() {
+    score += 1;
+    scoreEl.textContent = score;
+    scorePill.classList.remove("pop");
+    void scorePill.offsetWidth;
+    scorePill.classList.add("pop");
+  }
+
+  // ---- Tap behaviour: speak the name, then play the sound effect ----
+  function playAnimal(animal) {
+    // Cancel anything already speaking / playing so rapid taps stay crisp.
+    stopEverything();
+    bumpScore();
+
+    if (speechOK) {
+      try {
+        var u = new SpeechSynthesisUtterance(animal.name);
+        u.rate = 0.85;   // slightly slower for little ears
+        u.pitch = 1.1;
+        u.lang = "en-US";
+        var voice = pickEnglishVoice();
+        if (voice) u.voice = voice;
+
+        var soundPlayed = false;
+        var fireSound = function () {
+          if (soundPlayed) return;
+          soundPlayed = true;
+          playSound(animal.sound);
+        };
+        u.onend = fireSound;
+        u.onerror = fireSound;   // if speech fails, still play the sound
+        window.speechSynthesis.speak(u);
+
+        // Safety net: some browsers don't reliably fire onend.
+        setTimeout(fireSound, 2500);
+      } catch (e) {
+        playSound(animal.sound);
+      }
+    } else {
+      // No speech support — go straight to the sound effect.
+      playSound(animal.sound);
+    }
+  }
+
+  function stopEverything() {
+    if (speechOK) {
+      try { window.speechSynthesis.cancel(); } catch (e) {}
+    }
+    if (currentAudio) {
+      try { currentAudio.pause(); currentAudio.currentTime = 0; } catch (e) {}
+      currentAudio = null;
+    }
+  }
+
+  // ---- Sound effect from the sounds/ folder, with graceful fallback ----
+  function playSound(baseName) {
+    var audio = new Audio();
+    currentAudio = audio;
+
+    // If the file is missing / fails to load, play a gentle chime instead.
+    audio.addEventListener("error", function () {
+      chimeFallback();
+    });
+
+    // Prefer .mp3, but Audio() will simply error out if it's absent — handled above.
+    audio.src = "sounds/" + baseName + ".mp3";
+
+    var p = audio.play();
+    if (p && typeof p.catch === "function") {
+      p.catch(function () {
+        // Autoplay blocked or file missing — soft fallback.
+        chimeFallback();
+      });
+    }
+  }
+
+  // A short, friendly tone so every tap gives audio feedback even with no mp3 files yet.
+  function chimeFallback() {
+    try {
+      if (!audioCtx) {
+        var AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        audioCtx = new AC();
+      }
+      if (audioCtx.state === "suspended") audioCtx.resume();
+      var now = audioCtx.currentTime;
+      var osc = audioCtx.createOscillator();
+      var gain = audioCtx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(660, now);
+      osc.frequency.exponentialRampToValueAtTime(990, now + 0.18);
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(0.25, now + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(now);
+      osc.stop(now + 0.36);
+    } catch (e) {
+      /* audio truly unavailable — fail silently */
+    }
+  }
+
+  // ---- Voice selection (voices can load asynchronously) ----
+  var cachedVoices = [];
+  function loadVoices() {
+    if (speechOK) cachedVoices = window.speechSynthesis.getVoices() || [];
+  }
+  loadVoices();
+  if (speechOK && typeof window.speechSynthesis.onvoiceschanged !== "undefined") {
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+  }
+  function pickEnglishVoice() {
+    if (!cachedVoices.length) loadVoices();
+    for (var i = 0; i < cachedVoices.length; i++) {
+      if (/^en(-|_|$)/i.test(cachedVoices[i].lang)) return cachedVoices[i];
+    }
+    return null;
+  }
+})();
+</script>
+</body>
+</html>
