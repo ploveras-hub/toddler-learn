@@ -199,8 +199,11 @@
   var score = 0;
 
   var speechOK = "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
-  var currentAudio = null;   // track the currently playing sound effect
-  var audioCtx = null;       // lazily-created WebAudio context for the fallback chime
+  var currentAudio = null;      // the currently playing sound effect
+  var currentStopTimer = null;  // caps how long a sound plays
+  var currentFade = null;       // fade-out interval for the cap
+  var tapSeq = 0;               // guards against a stale tap playing its sound late
+  var audioCtx = null;          // lazily-created WebAudio context for the fallback chime
 
   // ---- Build the grid ----
   ANIMALS.forEach(function (animal, i) {
@@ -258,6 +261,7 @@
   function playAnimal(animal) {
     // Cancel anything already speaking / playing so rapid taps stay crisp.
     stopEverything();
+    var mySeq = ++tapSeq;   // this tap's id; a newer tap makes this one stale
     bumpScore();
 
     if (speechOK) {
@@ -273,6 +277,7 @@
         var fireSound = function () {
           if (soundPlayed) return;
           soundPlayed = true;
+          if (mySeq !== tapSeq) return;   // a newer animal was tapped — skip this one
           playSound(animal.sound);
         };
         u.onend = fireSound;
@@ -294,6 +299,8 @@
     if (speechOK) {
       try { window.speechSynthesis.cancel(); } catch (e) {}
     }
+    if (currentStopTimer) { clearTimeout(currentStopTimer); currentStopTimer = null; }
+    if (currentFade) { clearInterval(currentFade); currentFade = null; }
     if (currentAudio) {
       try { currentAudio.pause(); currentAudio.currentTime = 0; } catch (e) {}
       currentAudio = null;
@@ -305,21 +312,36 @@
     var audio = new Audio();
     currentAudio = audio;
 
-    // If the file is missing / fails to load, play a gentle chime instead.
-    audio.addEventListener("error", function () {
+    // Fall back to a gentle chime if the file is missing / fails to load.
+    // Guard so a missing file (which fires both 'error' and a rejected play
+    // promise) only chimes once.
+    var fellBack = false;
+    var fallback = function () {
+      if (fellBack) return;
+      fellBack = true;
       chimeFallback();
-    });
+    };
+    audio.addEventListener("error", fallback);
 
-    // Prefer .mp3, but Audio() will simply error out if it's absent — handled above.
     audio.src = "sounds/" + baseName + ".mp3";
 
     var p = audio.play();
     if (p && typeof p.catch === "function") {
-      p.catch(function () {
-        // Autoplay blocked or file missing — soft fallback.
-        chimeFallback();
-      });
+      p.catch(fallback); // autoplay blocked or file missing — soft fallback
     }
+
+    // Keep clips toddler-length: after a few seconds, fade out gently and stop.
+    // (Some source recordings run 30–60s; a little one shouldn't wait that long.)
+    currentStopTimer = setTimeout(function () {
+      currentFade = setInterval(function () {
+        if (audio.volume > 0.12) {
+          try { audio.volume -= 0.12; } catch (e) {}
+        } else {
+          clearInterval(currentFade); currentFade = null;
+          try { audio.pause(); } catch (e) {}
+        }
+      }, 45);
+    }, 4500);
   }
 
   // A short, friendly tone so every tap gives audio feedback even with no mp3 files yet.
